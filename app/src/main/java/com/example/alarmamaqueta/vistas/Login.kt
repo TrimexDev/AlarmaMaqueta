@@ -124,7 +124,8 @@ private fun validarCredenciales(
         .addOnCompleteListener { task ->
             if (task.isSuccessful) {
                 Toast.makeText(context, "Login correcto", Toast.LENGTH_SHORT).show()
-                navController.navigate("principal") {
+                val destino = if (auth.currentUser?.isEmailVerified == true) "principal" else "verificar"
+                navController.navigate(destino) {
                     popUpTo("login") { inclusive = true }
                 }
             } else {

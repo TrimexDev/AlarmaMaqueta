@@ -78,9 +78,84 @@ void leerSensores() {
   }
 }
 
+const int DIR_ESTADO = 200;
+const int DIR_REGISTRO = 210;
+const uint8_t MAX_REGISTRO = 10;
+const uint16_t MARCA_ESTADO = 0xB0A1;
+const uint16_t MARCA_REGISTRO = 0xB0A2;
+
+struct EstadoGuardado {
+  uint16_t marca;
+  uint8_t armada;
+  uint8_t disparada;
+  uint8_t causa;
+};
+
+struct RegistroDisparos {
+  uint16_t marca;
+  uint16_t total;
+  uint8_t siguiente;
+  uint8_t causa[MAX_REGISTRO];
+  uint16_t minuto[MAX_REGISTRO];
+};
+RegistroDisparos registro;
+unsigned int erroresSerie = 0;
+
+void guardarEstado() {
+  EstadoGuardado e;
+  e.marca = MARCA_ESTADO;
+  e.armada = armada ? 1 : 0;
+  e.disparada = disparada ? 1 : 0;
+  e.causa = causa;
+  EEPROM.put(DIR_ESTADO, e);
+}
+
+void cargarEstado() {
+  EstadoGuardado e;
+  EEPROM.get(DIR_ESTADO, e);
+  if (e.marca != MARCA_ESTADO) return;
+  armada = (e.armada == 1);
+  disparada = armada && (e.disparada == 1);
+  causa = disparada ? e.causa : 0;
+  if (disparada) Serial.println(F("Estado recuperado tras un corte de energia: alarma DISPARADA"));
+  else if (armada) Serial.println(F("Estado recuperado tras un corte de energia: alarma ARMADA"));
+}
+
+void cargarRegistro() {
+  EEPROM.get(DIR_REGISTRO, registro);
+  if (registro.marca != MARCA_REGISTRO || registro.siguiente >= MAX_REGISTRO) {
+    memset(&registro, 0, sizeof(registro));
+    registro.marca = MARCA_REGISTRO;
+  }
+}
+
+void anotarDisparo(uint8_t porQue) {
+  registro.causa[registro.siguiente] = porQue;
+  registro.minuto[registro.siguiente] = (uint16_t)(millis() / 60000UL);
+  registro.siguiente = (registro.siguiente + 1) % MAX_REGISTRO;
+  if (registro.total < 65535) registro.total++;
+  EEPROM.put(DIR_REGISTRO, registro);
+}
+
+void mostrarRegistro() {
+  Serial.print(F("Disparos guardados en la memoria: "));
+  Serial.println(registro.total);
+  uint8_t n = registro.total < MAX_REGISTRO ? registro.total : MAX_REGISTRO;
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t k = (registro.siguiente + MAX_REGISTRO - 1 - i) % MAX_REGISTRO;
+    Serial.print(F("  - "));
+    Serial.print(registro.causa[k] == 1 ? F("puerta") : F("movimiento"));
+    Serial.print(F(", a los "));
+    Serial.print(registro.minuto[k]);
+    Serial.println(F(" min de encendida"));
+  }
+}
+
 void disparar(uint8_t porQue) {
   disparada = true;
   causa = porQue;
+  guardarEstado();
+  anotarDisparo(porQue);
   Serial.println(porQue == 1 ? F("*** ALARMA: se abrio la puerta ***")
                              : F("*** ALARMA: movimiento en el pasillo ***"));
 }
@@ -95,6 +170,7 @@ void armar() {
   armada = true;
   disparada = false;
   causa = 0;
+  guardarEstado();
   Serial.println(F("Alarma ARMADA"));
 }
 
@@ -104,6 +180,7 @@ void desarmar() {
   disparada = false;
   causa = 0;
   zumbadorManual = false;
+  guardarEstado();
 }
 
 void ponerZumbador(bool on) {
@@ -296,13 +373,34 @@ void avisoPuente(const char* l) {
   }
 }
 
+bool valorValido(const char* l) {
+  return (l[4] == '0' || l[4] == '1') && l[5] == 0;
+}
+
+bool descartar(const char* l) {
+  erroresSerie++;
+  Serial.print(F("Linea serie descartada ("));
+  Serial.print(erroresSerie);
+  Serial.print(F(" en total): "));
+  for (const char* p = l; *p && p - l < 20; p++) Serial.print((*p >= 32 && *p < 127) ? *p : '.');
+  Serial.println();
+  return true;
+}
+
 bool lineaPuente(const char* l) {
   if (!strcmp(l, "?")) {
     preguntas++;
     tUltimaPregunta = millis();
-  } else if (!strncmp(l, "LED:", 4)) ledManual = (l[4] == '1');
-  else if (!strncmp(l, "BUZ:", 4)) zumbadorManual = (l[4] == '1');
-  else if (!strncmp(l, "ALM:", 4)) { if (l[4] == '1') armar(); else desarmar(); }
+  } else if (!strncmp(l, "LED:", 4)) {
+    if (!valorValido(l)) return descartar(l);
+    ledManual = (l[4] == '1');
+  } else if (!strncmp(l, "BUZ:", 4)) {
+    if (!valorValido(l)) return descartar(l);
+    zumbadorManual = (l[4] == '1');
+  } else if (!strncmp(l, "ALM:", 4)) {
+    if (!valorValido(l)) return descartar(l);
+    if (l[4] == '1') armar(); else desarmar();
+  }
   else if (!strncmp(l, "IP:", 3) || !strncmp(l, "WIFI:", 5)) avisoPuente(l);
   else return false;
   if (modo == PUENTE) {
@@ -316,6 +414,10 @@ bool lineaPuente(const char* l) {
 void procesarLineaEsp() {
   const char* l = lineaEsp;
   if (lineaPuente(l)) return;
+  if (modo == PUENTE) {
+    descartar(l);
+    return;
+  }
   if (!strcmp(l, "OK"))                                    respuestas |= R_OK;
   else if (!strcmp(l, "ERROR") || !strncmp(l, "link is not", 11)) respuestas |= R_ERROR;
   else if (!strcmp(l, "FAIL"))                             respuestas |= R_FAIL;
@@ -737,6 +839,9 @@ void setup() {
   Serial.println(puertaCerrada ? F("Puerta cerrada") : F("Puerta ABIERTA"));
 
   cargarConfig();
+  cargarRegistro();
+  mostrarRegistro();
+  cargarEstado();
   delay(1500);
   iniciarEsp();
   tRevision = millis();

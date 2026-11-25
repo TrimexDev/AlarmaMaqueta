@@ -17,6 +17,7 @@ import com.example.alarmamaqueta.ui.theme.AlarmaMaquetaTheme
 import com.example.alarmamaqueta.vistas.Login
 import com.example.alarmamaqueta.vistas.Principal
 import com.example.alarmamaqueta.vistas.Registrar
+import com.example.alarmamaqueta.vistas.Verificar
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
@@ -30,7 +31,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             AlarmaMaquetaTheme {
                 val navController = rememberNavController()
-                val inicio = remember { if (auth.currentUser != null) "principal" else "login" }
+                val inicio = remember {
+                    val usuario = auth.currentUser
+                    when {
+                        usuario == null -> "login"
+                        !usuario.isEmailVerified -> "verificar"
+                        else -> "principal"
+                    }
+                }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
                         NavHost(
@@ -39,6 +47,7 @@ class MainActivity : ComponentActivity() {
                         ) {
                             composable("login") { Login(navController, auth) }
                             composable("registrar") { Registrar(navController, auth) }
+                            composable("verificar") { Verificar(navController, auth) }
                             composable("principal") { Principal(navController, auth) }
                         }
                     }

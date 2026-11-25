@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -17,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,8 +40,32 @@ fun Ajustes(
     onGuardarIp: (String) -> Unit,
     onBuscar: () -> Unit,
     onCerrarSesion: () -> Unit,
+    onEliminarCuenta: () -> Unit,
 ) {
     var textoIp by remember(ip) { mutableStateOf(ip) }
+    var confirmarEliminar by remember { mutableStateOf(false) }
+
+    if (confirmarEliminar) {
+        AlertDialog(
+            onDismissRequest = { confirmarEliminar = false },
+            title = { Text("¿Eliminar tu cuenta?") },
+            text = {
+                Text(
+                    "Se borrarán tu cuenta y tu perfil. El registro de acciones conserva solo tu nombre de usuario " +
+                        "durante 90 días, como auditoría. Esta acción no se puede deshacer."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmarEliminar = false
+                    onEliminarCuenta()
+                }) { Text("Eliminar", color = Rojo) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmarEliminar = false }) { Text("Cancelar") }
+            },
+        )
+    }
 
     Column(
         Modifier
@@ -61,7 +87,7 @@ fun Ajustes(
                 OutlinedTextField(
                     value = textoIp,
                     onValueChange = { textoIp = it },
-                    label = { Text("IP del ESP-01 (manual)") },
+                    label = { Text("IP del ESP-01 (solo red local)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
@@ -82,11 +108,27 @@ fun Ajustes(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(correo, fontWeight = FontWeight.Bold)
+                Text("✓ Correo verificado", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 OutlinedButton(
                     onClick = onCerrarSesion,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Rojo),
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Cerrar sesión") }
+            }
+        }
+
+        Text("Privacidad y seguridad", style = MaterialTheme.typography.titleMedium)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("• Tu contraseña la protege Firebase; la app no la guarda.", fontSize = 13.sp)
+                Text("• Para desarmar la alarma se pide el bloqueo de pantalla del celular.", fontSize = 13.sp)
+                Text("• En el historial solo se muestra tu nombre de usuario, no tu correo.", fontSize = 13.sp)
+                Text("• Los eventos y acciones se guardan 90 días.", fontSize = 13.sp)
+                Text("• Al cerrar sesión se borran la IP y el historial de este celular.", fontSize = 13.sp)
+                OutlinedButton(
+                    onClick = { confirmarEliminar = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Rojo),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Eliminar mi cuenta") }
             }
         }
 
@@ -95,6 +137,7 @@ fun Ajustes(
             Column(Modifier.padding(16.dp)) {
                 Text("Sistema de Seguridad Inteligente", fontWeight = FontWeight.Bold)
                 Text("Arduino Uno + ESP-01 · Dos sensores infrarrojos · LED y zumbador", fontSize = 13.sp)
+                Text("Versión 3.0", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             }
         }
     }

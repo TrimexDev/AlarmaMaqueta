@@ -80,7 +80,7 @@ fun Registrar(navController: NavHostController, auth: FirebaseAuth) {
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Contraseña (mínimo 6 caracteres)") },
+                label = { Text("Contraseña (8+ caracteres, letras y números)") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -130,7 +130,8 @@ private fun crearCuenta(
     val problema = when {
         email.isEmpty() || password.isEmpty() -> "Complete todos los campos"
         !email.contains("@") -> "Ingrese un correo válido"
-        password.length < 6 -> "La contraseña debe tener al menos 6 caracteres"
+        password.length < 8 -> "La contraseña debe tener al menos 8 caracteres"
+        !password.any { it.isLetter() } || !password.any { it.isDigit() } -> "La contraseña debe tener letras y números"
         password != confirmar -> "Las contraseñas no coinciden"
         else -> null
     }
@@ -141,8 +142,9 @@ private fun crearCuenta(
     auth.createUserWithEmailAndPassword(email, password)
         .addOnCompleteListener { task ->
             if (task.isSuccessful) {
-                Toast.makeText(context, "Cuenta creada", Toast.LENGTH_SHORT).show()
-                navController.navigate("principal") {
+                task.result?.user?.sendEmailVerification()
+                Toast.makeText(context, "Cuenta creada. Revisa tu correo para verificarla", Toast.LENGTH_LONG).show()
+                navController.navigate("verificar") {
                     popUpTo("login") { inclusive = true }
                 }
             } else {

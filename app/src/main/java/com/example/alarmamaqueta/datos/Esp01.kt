@@ -28,6 +28,14 @@ data class Estado(
 )
 
 object Esp01 {
+    fun esIpLocal(ip: String): Boolean {
+        val partes = ip.trim().split('.')
+        if (partes.size != 4) return false
+        val n = partes.map { it.toIntOrNull() ?: return false }
+        if (n.any { it !in 0..255 }) return false
+        return n[0] == 10 || (n[0] == 172 && n[1] in 16..31) || (n[0] == 192 && n[1] == 168)
+    }
+
     @Volatile private var rutaBuena: Network? = null
     @Volatile private var hayRutaBuena = false
 
@@ -50,6 +58,11 @@ object Esp01 {
     private fun leerEstado(conn: HttpURLConnection): Estado {
         if (conn.responseCode != 200) throw IOException("Error ${conn.responseCode}")
         val j = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+        for (campo in listOf("ir", "mag", "led", "buzzer", "alarma", "disparada")) {
+            if (!j.has(campo) || j.optInt(campo, -1) !in 0..1) throw IOException("Respuesta inválida: $campo")
+        }
+        if (j.getInt("disparada") == 1 && j.getInt("alarma") == 0) throw IOException("Respuesta inválida: disparada sin armar")
+        if (j.optInt("causa", 0) !in 0..2) throw IOException("Respuesta inválida: causa")
         return Estado(
             movimiento = j.optInt("ir") == 1,
             puertaCerrada = j.optInt("mag", 1) == 1,

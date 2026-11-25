@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function verificado() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function nombreUsuario() {
+      return request.auth.token.email.split('@')[0];
+    }
+
+    function venceBien(d) {
+      return d.expira is timestamp
+        && d.expira > request.time
+        && d.expira < request.time + duration.value(120, 'd');
+    }
+
+    match /eventos/{evento} {
+      allow read: if verificado();
+      allow create: if verificado()
+        && request.resource.data.keys().hasOnly(['hora', 'texto', 'tipo', 'creado', 'expira'])
+        && request.resource.data.keys().hasAll(['hora', 'texto', 'tipo', 'creado', 'expira'])
+        && request.resource.data.hora is int
+        && request.resource.data.texto is string
+        && request.resource.data.texto.size() < 200
+        && request.resource.data.tipo in ['alarma', 'puerta', 'movimiento', 'sistema']
+        && request.resource.data.creado == request.time
+        && venceBien(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /acciones/{accion} {
+      allow read: if verificado();
+      allow create: if verificado()
+        && request.resource.data.keys().hasOnly(['uid', 'nombre', 'accion', 'resultado', 'hora', 'creado', 'expira'])
+        && request.resource.data.keys().hasAll(['uid', 'nombre', 'accion', 'resultado', 'hora', 'creado', 'expira'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.nombre == nombreUsuario()
+        && request.resource.data.accion in ['armar', 'desarmar', 'led_encender', 'led_apagar', 'zumbador_encender', 'zumbador_apagar']
+        && request.resource.data.resultado in ['ok', 'error']
+        && request.resource.data.hora is int
+        && request.resource.data.creado == request.time
+        && venceBien(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /usuarios/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if verificado()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['correo', 'nombre', 'ultimoAcceso'])
+        && request.resource.data.correo == request.auth.token.email
+        && request.resource.data.nombre == nombreUsuario()
+        && request.resource.data.ultimoAcceso == request.time;
+    }
+
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+  }
+}
