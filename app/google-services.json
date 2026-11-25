@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "73281123632",
+    "project_id": "alarmamaqueta",
+    "storage_bucket": "alarmamaqueta.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:73281123632:android:58f0554ef268a4cd4244f5",
+        "android_client_info": {
+          "package_name": "com.example.alarmamaqueta"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmhMeji9ljoe9AiBpk-WHOJJoLVOfHHx8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
