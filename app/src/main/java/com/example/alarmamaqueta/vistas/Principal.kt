@@ -11,6 +11,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -29,6 +30,7 @@ import com.example.alarmamaqueta.datos.Esp01
 import com.example.alarmamaqueta.datos.Estado
 import com.example.alarmamaqueta.datos.Evento
 import com.example.alarmamaqueta.datos.Historial
+import com.example.alarmamaqueta.datos.HistorialNube
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -59,6 +61,15 @@ fun Principal(navController: NavHostController, auth: FirebaseAuth) {
     var buscando by remember { mutableStateOf(false) }
     var busquedaFallida by remember { mutableStateOf(false) }
     val eventos = remember { mutableStateListOf<Evento>().apply { addAll(Historial.cargar(prefs)) } }
+    val eventosNube = remember { mutableStateListOf<Evento>() }
+
+    DisposableEffect(Unit) {
+        val escucha = HistorialNube.escuchar { lista ->
+            eventosNube.clear()
+            eventosNube.addAll(lista)
+        }
+        onDispose { escucha.remove() }
+    }
 
     val conectado = ip.isNotBlank() && estado != null && fallos < 3
     val error = when {
@@ -74,10 +85,12 @@ fun Principal(navController: NavHostController, auth: FirebaseAuth) {
         Toast.makeText(context, texto, Toast.LENGTH_SHORT).show()
     }
 
-    fun registrar(texto: String, tipo: String) {
-        eventos.add(0, Evento(System.currentTimeMillis(), texto, tipo))
+    fun registrar(texto: String, tipo: String, clave: String? = null, usuario: String? = null) {
+        val evento = Evento(System.currentTimeMillis(), texto, tipo, usuario)
+        eventos.add(0, evento)
         while (eventos.size > 100) eventos.removeAt(eventos.size - 1)
         Historial.guardar(prefs, eventos)
+        if (clave != null) HistorialNube.subir(evento, clave, usuario)
     }
 
     fun guardarIp(nueva: String) {
@@ -85,7 +98,7 @@ fun Principal(navController: NavHostController, auth: FirebaseAuth) {
         prefs.edit().putString("ip", ip).apply()
     }
 
-    fun procesar(nuevo: Estado) {
+    fun procesar(nuevo: Estado, usuario: String? = null) {
         val viejo = estado
         val ahora = System.currentTimeMillis()
         if (viejo != null) {
@@ -96,12 +109,13 @@ fun Principal(navController: NavHostController, auth: FirebaseAuth) {
                     else -> "🚨 Alarma disparada"
                 },
                 "alarma",
+                "disparada",
             )
-            if (!nuevo.puertaCerrada && viejo.puertaCerrada) registrar("🚪 Puerta abierta", "puerta")
-            if (nuevo.puertaCerrada && !viejo.puertaCerrada) registrar("🚪 Puerta cerrada", "puerta")
-            if (nuevo.movimiento && !viejo.movimiento) registrar("🚶 Movimiento en el pasillo", "movimiento")
-            if (nuevo.armada && !viejo.armada) registrar("🔒 Alarma armada", "sistema")
-            if (!nuevo.armada && viejo.armada) registrar("🔓 Alarma desarmada", "sistema")
+            if (!nuevo.puertaCerrada && viejo.puertaCerrada) registrar("🚪 Puerta abierta", "puerta", "puerta_abierta")
+            if (nuevo.puertaCerrada && !viejo.puertaCerrada) registrar("🚪 Puerta cerrada", "puerta", "puerta_cerrada")
+            if (nuevo.movimiento && !viejo.movimiento) registrar("🚶 Movimiento en el pasillo", "movimiento", "movimiento")
+            if (nuevo.armada && !viejo.armada) registrar("🔒 Alarma armada", "sistema", "armada", usuario)
+            if (!nuevo.armada && viejo.armada) registrar("🔓 Alarma desarmada", "sistema", "desarmada", usuario)
             if (nuevo.puertaCerrada != viejo.puertaCerrada) cambioPuerta = ahora
             if (nuevo.movimiento != viejo.movimiento) cambioPasillo = ahora
         }
@@ -143,7 +157,13 @@ fun Principal(navController: NavHostController, auth: FirebaseAuth) {
         }
         scope.launch {
             try {
-                procesar(Esp01.pedir(context, ip, ruta))
+                val nuevo = Esp01.pedir(context, ip, ruta)
+                procesar(nuevo, correo)
+                if (ruta.startsWith("/alarma")) {
+                    val texto = if (nuevo.armada) "🔒 Alarma armada" else "🔓 Alarma desarmada"
+                    val clave = if (nuevo.armada) "armada" else "desarmada"
+                    HistorialNube.subir(Evento(System.currentTimeMillis(), texto, "sistema", correo), clave, correo)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -211,13 +231,10 @@ fun Principal(navController: NavHostController, auth: FirebaseAuth) {
     ) { inner ->
         Box(Modifier.padding(inner).fillMaxSize()) {
             when (pestana) {
-                Pestana.INICIO -> Inicio(correo, con, eventos.firstOrNull(), ::armar)
+                Pestana.INICIO -> Inicio(correo, con, eventosNube.firstOrNull() ?: eventos.firstOrNull(), ::armar)
                 Pestana.SENSORES -> Sensores(con, cambioPuerta, cambioPasillo, ultimaLectura)
                 Pestana.CONTROL -> Control(con, ::armar, ::led, ::zumbador)
-                Pestana.HISTORIAL -> Eventos(eventos) {
-                    eventos.clear()
-                    Historial.guardar(prefs, eventos)
-                }
+                Pestana.HISTORIAL -> Eventos(eventosNube)
                 Pestana.AJUSTES -> Ajustes(correo, ip, con, ::guardarIp, ::buscarAlarma, ::cerrarSesion)
             }
         }

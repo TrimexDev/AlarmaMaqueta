@@ -4,7 +4,7 @@ import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Evento(val hora: Long, val texto: String, val tipo: String)
+data class Evento(val hora: Long, val texto: String, val tipo: String, val usuario: String? = null)
 
 object Historial {
     fun cargar(prefs: SharedPreferences): List<Evento> = try {

@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,20 +31,17 @@ import com.example.alarmamaqueta.ui.theme.Naranjo
 import com.example.alarmamaqueta.ui.theme.Rojo
 
 @Composable
-fun Eventos(eventos: List<Evento>, onBorrar: () -> Unit) {
+fun Eventos(eventos: List<Evento>) {
     Column(
         Modifier
             .fillMaxSize()
             .padding(20.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Encabezado("Historial", "${eventos.size} eventos guardados") }
-            if (eventos.isNotEmpty()) TextButton(onClick = onBorrar) { Text("Borrar") }
-        }
+        Encabezado("Historial", "${eventos.size} eventos · compartido entre todos los celulares")
         Spacer(Modifier.height(12.dp))
         if (eventos.isEmpty()) {
             Text(
-                "Todavía no hay eventos. Aquí aparecerán las veces que se abra la puerta, haya movimiento o se dispare la alarma.",
+                "Todavía no hay eventos. Aquí aparecerán las veces que se abra la puerta, haya movimiento o se dispare la alarma, desde cualquier celular.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -63,8 +59,9 @@ fun Eventos(eventos: List<Evento>, onBorrar: () -> Unit) {
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(ev.texto, fontWeight = FontWeight.Medium)
+                                val quien = if (ev.usuario != null) " · por ${ev.usuario}" else ""
                                 Text(
-                                    fechaHora(ev.hora),
+                                    fechaHora(ev.hora) + quien,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 13.sp,
                                 )
